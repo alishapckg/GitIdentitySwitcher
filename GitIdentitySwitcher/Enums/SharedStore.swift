@@ -17,6 +17,9 @@ enum SharedStore {
     return baseDirectory.appendingPathComponent("repos.json")
   }
   
+  
+  // MARK: - Methods
+  
   static func loadProfiles() -> [GitProfile] {
     guard let data = try? Data(contentsOf: profilesURL),
           let decoded = try? JSONDecoder().decode([GitProfile].self, from: data) else { return [] }
