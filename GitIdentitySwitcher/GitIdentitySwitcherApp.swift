@@ -8,6 +8,9 @@ struct GitIdentitySwitcherApp: App {
   @StateObject private var profileManager = ProfileManager()
   @StateObject private var repoManager = RepoManager()
   
+  
+  // MARK: - Body
+  
   var body: some Scene {
     MenuBarExtra("Git ID", systemImage: "person.crop.circle.badge.checkmark") {
       TabView {
