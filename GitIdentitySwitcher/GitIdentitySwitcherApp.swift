@@ -2,6 +2,9 @@ import SwiftUI
 
 @main
 struct GitIdentitySwitcherApp: App {
+  
+  // MARK: - Parameters
+  
   @StateObject private var profileManager = ProfileManager()
   @StateObject private var repoManager = RepoManager()
   
