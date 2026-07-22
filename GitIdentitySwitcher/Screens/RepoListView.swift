@@ -11,6 +11,9 @@ struct RepoListView: View {
   @State private var pendingPath: String?
   @State private var selectedProfileID: UUID?
   
+  
+  // MARK: - Body
+  
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Tracked repositories")
