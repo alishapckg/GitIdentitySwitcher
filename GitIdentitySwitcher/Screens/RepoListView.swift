@@ -2,6 +2,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct RepoListView: View {
+  
+  // MARK: - Properties
+  
   @EnvironmentObject var profileManager: ProfileManager
   @EnvironmentObject var repoManager: RepoManager
   @State private var showingPicker = false
