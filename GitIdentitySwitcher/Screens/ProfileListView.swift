@@ -8,6 +8,8 @@ struct ProfileListView: View {
   @State private var showingAddSheet = false
   @State private var editingProfile: GitProfile?
   
+  // MARK: - Body
+  
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text("Current(global): \(manager.activeName)")
