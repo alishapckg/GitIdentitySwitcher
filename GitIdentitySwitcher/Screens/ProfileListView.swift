@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ProfileListView: View {
+  
+  // MARK: - Properties
+  
   @EnvironmentObject var manager: ProfileManager
   @State private var showingAddSheet = false
   @State private var editingProfile: GitProfile?
