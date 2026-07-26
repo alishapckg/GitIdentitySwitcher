@@ -24,6 +24,8 @@ struct ProfileEditView: View {
     self.onSave = onSave
   }
   
+  // MARK: - Body
+  
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(existingID == nil ? "New profile" : "Edit profile")
