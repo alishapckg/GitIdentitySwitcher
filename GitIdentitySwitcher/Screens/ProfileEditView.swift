@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ProfileEditView: View {
+  
+  // MARK: - Properties
+  
   @Environment(\.dismiss) var dismiss
   
   @State private var label: String
@@ -9,6 +12,9 @@ struct ProfileEditView: View {
   
   let existingID: UUID?
   let onSave: (GitProfile) -> Void
+  
+  
+  // MARK: - Init
   
   init(profile: GitProfile?, onSave: @escaping (GitProfile) -> Void) {
     _label = State(initialValue: profile?.label ?? "")
