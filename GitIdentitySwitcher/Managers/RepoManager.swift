@@ -2,11 +2,20 @@ import Foundation
 import Combine
 
 class RepoManager: ObservableObject {
+  
+  // MARK: - Properties
+  
   @Published var repos: [WatchedRepository] = []
+  
+  
+  // MARK: - Init
   
   init() {
     repos = SharedStore.loadRepos()
   }
+  
+  
+  // MARK: - Methods
   
   func addRepo(path: String, expectedProfile: GitProfile) {
     var repo = WatchedRepository(path: path, expectedProfileID: expectedProfile.id)
