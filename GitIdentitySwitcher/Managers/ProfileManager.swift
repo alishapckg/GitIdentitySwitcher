@@ -2,9 +2,15 @@ import Foundation
 import Combine
 
 class ProfileManager: ObservableObject {
+  
+  // MARK: - Properties
+  
   @Published var profiles: [GitProfile] = []
   @Published var activeName: String = ""
   @Published var activeEmail: String = ""
+  
+  
+  // MARK: - Init
   
   init() {
     profiles = SharedStore.loadProfiles()
@@ -17,6 +23,9 @@ class ProfileManager: ObservableObject {
     }
     refreshCurrentIdentity()
   }
+  
+  
+  // MARK: - Methods
   
   func addProfile(_ p: GitProfile) {
     profiles.append(p)
