@@ -21,7 +21,6 @@ struct GitIdentitySwitcherApp: App {
             Text("Repositories")
           }
       }
-      .frame(width: 300, height: 400)
     }
     .menuBarExtraStyle(.window)
   }
