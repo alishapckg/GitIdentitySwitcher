@@ -10,12 +10,16 @@ struct GitIdentitySwitcherApp: App {
       TabView {
         ProfileListView()
           .environmentObject(profileManager)
-          .tabItem { Text("Profiles") }
+          .tabItem {
+            Text("Profiles")
+          }
         
         RepoListView()
           .environmentObject(profileManager)
           .environmentObject(repoManager)
-          .tabItem { Text("Repositories") }
+          .tabItem {
+            Text("Repositories")
+          }
       }
       .frame(width: 300, height: 400)
     }
