@@ -23,7 +23,7 @@ struct ProfileEditView: View {
       Text(existingID == nil ? "New profile" : "Edit profile")
         .font(.headline)
       
-      TextField("Title (for ex., work", text: $label)
+      TextField("Title (for ex., work)", text: $label)
       TextField("Git name", text: $name)
       TextField("Git email", text: $email)
         .textContentType(.emailAddress)
