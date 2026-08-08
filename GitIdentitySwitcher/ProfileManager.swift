@@ -28,6 +28,13 @@ class ProfileManager: ObservableObject {
     SharedStore.saveProfiles(profiles)
   }
   
+  func updateProfile(_ p: GitProfile) {
+    if let idx = profiles.firstIndex(where: { $0.id == p.id }) {
+      profiles[idx] = p
+      SharedStore.saveProfiles(profiles)
+    }
+  }
+  
   func switchGlobalTo(_ profile: GitProfile) {
     runGit(["config", "--global", "user.name", profile.name])
     runGit(["config", "--global", "user.email", profile.email])
@@ -47,7 +54,6 @@ class ProfileManager: ObservableObject {
     if let cwd = cwd {
       task.currentDirectoryURL = URL(fileURLWithPath: cwd)
     }
-    
     let pipe = Pipe()
     task.standardOutput = pipe
     task.standardError = Pipe()
