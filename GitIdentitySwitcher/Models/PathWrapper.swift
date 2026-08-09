@@ -1,8 +1,4 @@
-//
-//  PathWrapper.swift
-//  GitIdentitySwitcher
-//
-//  Created by NS on 8/9/26.
-//
-
-import Foundation
+struct PathWrapper: Identifiable {
+  var id: String { path }
+  let path: String
+}
