@@ -54,6 +54,5 @@ struct ProfileEditView: View {
       }
     }
     .padding(20)
-    .frame(width: 320)
   }
 }

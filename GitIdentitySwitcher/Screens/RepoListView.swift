@@ -46,7 +46,6 @@ struct RepoListView: View {
       }
     }
     .padding(10)
-    .frame(width: 280)
     .fileImporter(isPresented: $showingPicker, allowedContentTypes: [.folder]) { result in
       if case .success(let url) = result {
         pendingPath = url.path
@@ -81,7 +80,6 @@ struct RepoListView: View {
         }
       }
       .padding(20)
-      .frame(width: 320)
     }
   }
 }

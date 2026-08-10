@@ -2,32 +2,21 @@ import SwiftUI
 
 @main
 struct GitIdentitySwitcherApp: App {
-  
-  // MARK: - Parameters
-  
   @StateObject private var profileManager = ProfileManager()
   @StateObject private var repoManager = RepoManager()
   
-  
-  // MARK: - Body
-  
   var body: some Scene {
     MenuBarExtra("Git ID", systemImage: "person.crop.circle.badge.checkmark") {
-      TabView {
-        ProfileListView()
-          .environmentObject(profileManager)
-          .tabItem {
-            Text("Profiles")
-          }
-        
-        RepoListView()
-          .environmentObject(profileManager)
-          .environmentObject(repoManager)
-          .tabItem {
-            Text("Repositories")
-          }
-      }
+      MenuBarRootView()
+        .environmentObject(profileManager)
+        .environmentObject(repoManager)
     }
     .menuBarExtraStyle(.window)
+    
+    WindowGroup("Edit Profile", id: "edit-profile", for: UUID?.self) { $profileID in
+      ProfileEditWindow(profileID: profileID.flatMap { $0 })
+        .environmentObject(profileManager)
+    }
+    .windowResizability(.contentSize)
   }
 }
