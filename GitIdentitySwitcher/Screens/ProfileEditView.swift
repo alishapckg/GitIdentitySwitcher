@@ -4,24 +4,24 @@ struct ProfileEditView: View {
   
   // MARK: - Properties
   
-  @Environment(\.dismiss) var dismiss
-  
   @State private var label: String
   @State private var name: String
   @State private var email: String
   
   let existingID: UUID?
   let onSave: (GitProfile) -> Void
+  var onCancel: (() -> Void)?
   
   
   // MARK: - Init
   
-  init(profile: GitProfile?, onSave: @escaping (GitProfile) -> Void) {
+  init(profile: GitProfile?, onSave: @escaping (GitProfile) -> Void, onCancel: (() -> Void)? = nil) {
     _label = State(initialValue: profile?.label ?? "")
     _name = State(initialValue: profile?.name ?? "")
     _email = State(initialValue: profile?.email ?? "")
     self.existingID = profile?.id
     self.onSave = onSave
+    self.onCancel = onCancel
   }
   
   // MARK: - Body
@@ -38,7 +38,9 @@ struct ProfileEditView: View {
       
       HStack {
         Spacer()
-        Button("Cancel") { dismiss() }
+        Button("Cancel") {
+          onCancel?()
+        }
         Button("Save") {
           let profile = GitProfile(
             id: existingID ?? UUID(),
@@ -47,7 +49,6 @@ struct ProfileEditView: View {
             email: email
           )
           onSave(profile)
-          dismiss()
         }
         .disabled(label.isEmpty || name.isEmpty || email.isEmpty)
         .keyboardShortcut(.defaultAction)

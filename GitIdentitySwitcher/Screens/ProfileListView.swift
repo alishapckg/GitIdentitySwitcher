@@ -5,8 +5,8 @@ struct ProfileListView: View {
   // MARK: - Properties
   
   @EnvironmentObject var manager: ProfileManager
-  @State private var showingAddSheet = false
-  @State private var editingProfile: GitProfile?
+  var onAddProfile: (() -> Void)?
+  var onEditProfile: ((GitProfile) -> Void)?
   
   // MARK: - Body
   
@@ -36,7 +36,7 @@ struct ProfileListView: View {
         .buttonStyle(.plain)
         .padding(.vertical, 2)
         .contextMenu {
-          Button("Edit") { editingProfile = profile }
+          Button("Edit") { onEditProfile?(profile) }
           Button("Delete", role: .destructive) { manager.deleteProfile(profile) }
         }
       }
@@ -44,7 +44,7 @@ struct ProfileListView: View {
       Divider()
       
       Button("Add profile...") {
-        showingAddSheet = true
+        onAddProfile?()
       }
       
       Button("Logout") {
@@ -52,15 +52,5 @@ struct ProfileListView: View {
       }
     }
     .padding(10)
-    .sheet(isPresented: $showingAddSheet) {
-      ProfileEditView(profile: nil) { newProfile in
-        manager.addProfile(newProfile)
-      }
-    }
-    .sheet(item: $editingProfile) { profile in
-      ProfileEditView(profile: profile) { updated in
-        manager.updateProfile(updated)
-      }
-    }
   }
 }
