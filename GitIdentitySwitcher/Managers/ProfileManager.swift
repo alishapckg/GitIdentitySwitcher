@@ -8,6 +8,7 @@ class ProfileManager: ObservableObject {
   @Published var profiles: [GitProfile] = []
   @Published var activeName: String = ""
   @Published var activeEmail: String = ""
+  @Published var isSwitching: Bool = false
   
   
   // MARK: - Init
@@ -45,9 +46,19 @@ class ProfileManager: ObservableObject {
   }
   
   func switchGlobalTo(_ profile: GitProfile) {
-    runGit(["config", "--global", "user.name", profile.name])
-    runGit(["config", "--global", "user.email", profile.email])
-    refreshCurrentIdentity()
+    isSwitching = true
+    Task.detached { [weak self] in
+      guard let self else { return }
+      self.runGit(["config", "--global", "user.name", profile.name])
+      self.runGit(["config", "--global", "user.email", profile.email])
+      let name = self.runGit(["config", "--global", "user.name"])
+      let email = self.runGit(["config", "--global", "user.email"])
+      await MainActor.run {
+        self.activeName = name
+        self.activeEmail = email
+        self.isSwitching = false
+      }
+    }
   }
   
   func refreshCurrentIdentity() {

@@ -12,9 +12,15 @@ struct ProfileListView: View {
   
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
-      Text("Current(global): \(manager.activeName)")
-        .font(.caption)
-        .foregroundColor(.secondary)
+      HStack {
+        Text("Current(global): \(manager.activeName)")
+          .font(.caption)
+          .foregroundColor(.secondary)
+        if manager.isSwitching {
+          ProgressView()
+            .controlSize(.small)
+        }
+      }
       Text(manager.activeEmail)
         .font(.caption2)
         .foregroundColor(.secondary)
@@ -40,6 +46,7 @@ struct ProfileListView: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 2)
+        .disabled(manager.isSwitching)
         .contextMenu {
           Button("Edit") { onEditProfile?(profile) }
           Button("Delete", role: .destructive) { manager.deleteProfile(profile) }
