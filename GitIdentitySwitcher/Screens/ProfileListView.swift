@@ -26,7 +26,12 @@ struct ProfileListView: View {
           manager.switchGlobalTo(profile)
         } label: {
           HStack {
-            Text(profile.label)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(profile.label)
+              Text(profile.email)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
             Spacer()
             if profile.email == manager.activeEmail {
               Image(systemName: "checkmark")
