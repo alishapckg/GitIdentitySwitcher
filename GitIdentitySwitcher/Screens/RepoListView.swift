@@ -6,7 +6,20 @@ struct RepoListView: View {
   
   @EnvironmentObject var profileManager: ProfileManager
   @EnvironmentObject var repoManager: RepoManager
-  @State private var pendingPath: String?
+  
+  enum Target: Equatable {
+    case add(String)
+    case change(WatchedRepository)
+    
+    var path: String {
+      switch self {
+      case .add(let path): return path
+      case .change(let repo): return repo.path
+      }
+    }
+  }
+  
+  @State private var target: Target?
   @State private var selectedProfileID: UUID?
   @State private var showDuplicateAlert = false
   
@@ -14,15 +27,15 @@ struct RepoListView: View {
   
   var body: some View {
     Group {
-      if let pendingPath {
-        profilePicker(for: pendingPath)
+      if let target {
+        profilePicker(for: target)
           .transition(.move(edge: .trailing).combined(with: .opacity))
       } else {
         listContent
           .transition(.move(edge: .trailing).combined(with: .opacity))
       }
     }
-    .animation(.easeInOut(duration: 0.15), value: pendingPath)
+    .animation(.easeInOut(duration: 0.15), value: target)
     .alert("Already tracked", isPresented: $showDuplicateAlert) {
       Button("OK", role: .cancel) {}
     } message: {
@@ -37,7 +50,7 @@ struct RepoListView: View {
       Text("Tracked repositories")
         .font(.headline)
       
-      Text("Hooks block commit/push when the active account doesn't match the expected one.")
+      Text("Hooks block commit/push when the active account doesn't match the expected one. Right-click a repo to change its expected profile.")
         .font(.caption2)
         .foregroundColor(.secondary)
       
@@ -45,7 +58,11 @@ struct RepoListView: View {
         RepoRowView(
           repo: repo,
           profileManager: profileManager,
-          onDelete: { repoManager.removeRepo(repo) }
+          onDelete: { repoManager.removeRepo(repo) },
+          onChangeProfile: {
+            selectedProfileID = repo.expectedProfileID
+            target = .change(repo)
+          }
         )
       }
       
@@ -58,11 +75,17 @@ struct RepoListView: View {
   
   // MARK: - Profile Picker
   
-  private func profilePicker(for path: String) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Select expected profile for:")
+  private func profilePicker(for target: Target) -> some View {
+    let isChange: Bool
+    switch target {
+    case .add: isChange = false
+    case .change: isChange = true
+    }
+    
+    return VStack(alignment: .leading, spacing: 12) {
+      Text(isChange ? "Change expected profile for:" : "Select expected profile for:")
         .font(.headline)
-      Text(path)
+      Text(target.path)
         .font(.caption)
         .foregroundColor(.secondary)
       
@@ -75,10 +98,14 @@ struct RepoListView: View {
       HStack {
         Spacer()
         Button("Cancel") { resetPicker() }
-        Button("Add") {
-          if let id = selectedProfileID,
-             let profile = profileManager.profiles.first(where: { $0.id == id }) {
+        Button(isChange ? "Update" : "Add") {
+          guard let id = selectedProfileID,
+                let profile = profileManager.profiles.first(where: { $0.id == id }) else { return }
+          switch target {
+          case .add(let path):
             repoManager.addRepo(path: path, expectedProfile: profile)
+          case .change(let repo):
+            repoManager.updateExpectedProfile(for: repo.id, to: profile)
           }
           resetPicker()
         }
@@ -91,7 +118,7 @@ struct RepoListView: View {
   // MARK: - Helpers
   
   private func resetPicker() {
-    pendingPath = nil
+    target = nil
     selectedProfileID = nil
   }
   
@@ -108,7 +135,7 @@ struct RepoListView: View {
         showDuplicateAlert = true
       } else {
         selectedProfileID = profileManager.profiles.first?.id
-        pendingPath = path
+        target = .add(path)
       }
     }
   }
@@ -120,6 +147,7 @@ struct RepoRowView: View {
   let repo: WatchedRepository
   @ObservedObject var profileManager: ProfileManager
   var onDelete: () -> Void
+  var onChangeProfile: () -> Void
   
   @State private var currentName = ""
   @State private var currentEmail = ""
@@ -170,6 +198,14 @@ struct RepoRowView: View {
       .buttonStyle(.plain)
     }
     .padding(.vertical, 2)
+    .contextMenu {
+      Button("Change expected profile…") { onChangeProfile() }
+      Button(role: .destructive) {
+        onDelete()
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
     .task(id: "\(repo.path)|\(profileManager.activeEmail)") {
       await fetchIdentity()
     }

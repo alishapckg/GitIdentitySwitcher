@@ -42,6 +42,12 @@ class RepoManager: ObservableObject {
     SharedStore.saveRepos(repos)
   }
   
+  func updateExpectedProfile(for repoID: UUID, to profile: GitProfile) {
+    guard let idx = repos.firstIndex(where: { $0.id == repoID }) else { return }
+    repos[idx].expectedProfileID = profile.id
+    SharedStore.saveRepos(repos)
+  }
+  
   
   // MARK: - Hook installation
   
