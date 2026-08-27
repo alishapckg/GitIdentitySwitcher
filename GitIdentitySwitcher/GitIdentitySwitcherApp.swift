@@ -12,11 +12,5 @@ struct GitIdentitySwitcherApp: App {
         .environmentObject(repoManager)
     }
     .menuBarExtraStyle(.window)
-    
-    WindowGroup("Edit Profile", id: "edit-profile", for: UUID?.self) { $profileID in
-      ProfileEditWindow(profileID: profileID.flatMap { $0 })
-        .environmentObject(profileManager)
-    }
-    .windowResizability(.contentSize)
   }
 }

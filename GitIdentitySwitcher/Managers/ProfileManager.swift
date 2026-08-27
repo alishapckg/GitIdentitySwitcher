@@ -14,13 +14,15 @@ class ProfileManager: ObservableObject {
   // MARK: - Init
   
   init() {
-    profiles = SharedStore.loadProfiles()
-    if profiles.isEmpty {
+    let stored = SharedStore.loadProfiles()
+    if stored.isEmpty, !FileManager.default.fileExists(atPath: SharedStore.profilesURL.path) {
       profiles = [
         GitProfile(label: "Work", name: "Work Name", email: "you@work.com"),
         GitProfile(label: "Personal", name: "Personal Name", email: "you@personal.com")
       ]
       SharedStore.saveProfiles(profiles)
+    } else {
+      profiles = stored
     }
     refreshCurrentIdentity()
   }

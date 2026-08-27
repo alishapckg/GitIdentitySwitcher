@@ -30,9 +30,8 @@ class RepoManager: ObservableObject {
   
   func addRepo(path: String, expectedProfile: GitProfile) {
     guard !isTracked(path) else { return }
-    var repo = WatchedRepository(path: path, expectedProfileID: expectedProfile.id)
+    let repo = WatchedRepository(path: path, expectedProfileID: expectedProfile.id)
     installHooks(in: path)
-    repo.hooksInstalled = true
     repos.append(repo)
     SharedStore.saveRepos(repos)
   }

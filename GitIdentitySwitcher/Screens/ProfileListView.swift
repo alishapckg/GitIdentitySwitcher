@@ -39,7 +39,7 @@ struct ProfileListView: View {
                 .foregroundColor(.secondary)
             }
             Spacer()
-            if profile.email == manager.activeEmail {
+            if profile.email.lowercased() == manager.activeEmail.lowercased() {
               Image(systemName: "checkmark")
             }
           }
@@ -62,7 +62,7 @@ struct ProfileListView: View {
         onAddProfile?()
       }
       
-      Button("Logout") {
+      Button("Quit") {
         NSApp.terminate(nil)
       }
     }
