@@ -8,6 +8,7 @@ struct RepoListView: View {
   @EnvironmentObject var repoManager: RepoManager
   @State private var pendingPath: String?
   @State private var selectedProfileID: UUID?
+  @State private var showDuplicateAlert = false
   
   // MARK: - Body
   
@@ -22,10 +23,15 @@ struct RepoListView: View {
       }
     }
     .animation(.easeInOut(duration: 0.15), value: pendingPath)
+    .alert("Already tracked", isPresented: $showDuplicateAlert) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("This repository is already in the list.")
+    }
   }
   
   // MARK: - List Content
-
+  
   private var listContent: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Tracked repositories")
@@ -97,15 +103,20 @@ struct RepoListView: View {
     panel.allowsMultipleSelection = false
     panel.prompt = "Add"
     if panel.runModal() == .OK, let url = panel.url {
-      selectedProfileID = profileManager.profiles.first?.id
-      pendingPath = url.path
+      let path = url.path
+      if repoManager.isTracked(path) {
+        showDuplicateAlert = true
+      } else {
+        selectedProfileID = profileManager.profiles.first?.id
+        pendingPath = path
+      }
     }
   }
 }
 
 // MARK: - Repo Row
 
-private struct RepoRowView: View {
+struct RepoRowView: View {
   let repo: WatchedRepository
   @ObservedObject var profileManager: ProfileManager
   var onDelete: () -> Void
@@ -166,8 +177,16 @@ private struct RepoRowView: View {
   
   private func fetchIdentity() async {
     let result = await Task.detached { [profileManager] in
-      let name = profileManager.runGit(["config", "user.name"], cwd: repo.path)
-      let email = profileManager.runGit(["config", "user.email"], cwd: repo.path)
+      let output = profileManager.runGit(["config", "--list"], cwd: repo.path)
+      var name = ""
+      var email = ""
+      for line in output.split(separator: "\n") {
+        guard let eq = line.firstIndex(of: "=") else { continue }
+        let key = line[..<eq].lowercased()
+        let value = String(line[line.index(after: eq)...])
+        if key == "user.name" { name = value }
+        else if key == "user.email" { email = value }
+      }
       return (name, email)
     }.value
     currentName = result.0
