@@ -43,8 +43,11 @@ struct ProfileListView: View {
               Image(systemName: "checkmark")
             }
           }
+          .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.vertical, 2)
         .disabled(manager.isSwitching)
         .contextMenu {
