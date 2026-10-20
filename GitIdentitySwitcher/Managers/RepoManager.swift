@@ -5,7 +5,10 @@ class RepoManager: ObservableObject {
   
   // MARK: - Properties
   
+  @Published var currentRepoPath: String = FileManager.default.currentDirectoryPath
   @Published var repos: [WatchedRepository] = []
+  
+  @Published var targetRepoPathForCommit: String = ""
   
   
   // MARK: - Init
@@ -109,6 +112,25 @@ class RepoManager: ObservableObject {
       "exit 0"
     ]
     return lines.joined(separator: "\n")
+  }
+  
+  func hasChanges(in repoPath: String) -> Bool {
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+    task.arguments = ["status", "--porcelain"]
+    task.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+    
+    let pipe = Pipe()
+    task.standardOutput = pipe
+    task.standardError = pipe
+    
+    try? task.run()
+    task.waitUntilExit()
+    
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    
+    return !output.isEmpty
   }
   
   func installHooks(in repoPath: String) {

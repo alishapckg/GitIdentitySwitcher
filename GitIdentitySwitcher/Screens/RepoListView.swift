@@ -146,6 +146,10 @@ struct RepoListView: View {
 struct RepoRowView: View {
   let repo: WatchedRepository
   @ObservedObject var profileManager: ProfileManager
+  @EnvironmentObject var repoManager: RepoManager
+  @Environment(\.openWindow) private var openWindow
+  
+  @State private var showFixAlert = false
   var onDelete: () -> Void
   var onChangeProfile: () -> Void
   
@@ -158,6 +162,8 @@ struct RepoRowView: View {
     let isMatch = expected != nil
       && !currentEmail.isEmpty
       && expected!.email.lowercased() == currentEmail.lowercased()
+    
+    let hasChanges = repoManager.hasChanges(in: repo.path)
     
     HStack {
       VStack(alignment: .leading, spacing: 2) {
@@ -177,6 +183,15 @@ struct RepoRowView: View {
                 : "Mismatch! Active: \(currentName) <\(currentEmail)>"
             )
             .font(.caption2)
+            
+            if !isMatch, let expected {
+              Button("Fix") {
+                showFixAlert = true
+              }
+              .buttonStyle(.bordered)
+              .controlSize(.mini)
+              .tint(.orange)
+            }
           }
           .foregroundColor(isMatch ? .green : .red)
         } else {
@@ -190,6 +205,19 @@ struct RepoRowView: View {
         }
       }
       Spacer()
+      
+      Button {
+        repoManager.targetRepoPathForCommit = repo.path
+        openWindow(id: "custom-commit-window") // не открывается
+      } label: {
+        Image(systemName: "calendar.badge.clock")
+          .renderingMode(.template)
+          .foregroundStyle(.blue)
+      }
+      .buttonStyle(.borderless)
+      .disabled(!hasChanges)
+      .help(hasChanges ? "Create custom commit" : "No changes for commit")
+      
       Button(role: .destructive) {
         onDelete()
       } label: {
@@ -206,27 +234,62 @@ struct RepoRowView: View {
         Label("Delete", systemImage: "trash")
       }
     }
-    .task(id: "\(repo.path)|\(profileManager.activeEmail)") {
+    .task(id: "\(repo.path)|\(repo.expectedProfileID)") {
       await fetchIdentity()
+    }
+    .alert("Change repo's config?", isPresented: $showFixAlert) {
+      Button("Cancel", role: .cancel) {}
+      Button("Change", role: .destructive) {
+        if let expected, !currentEmail.isEmpty {
+          
+          let updatedProfile = GitProfile(id: expected.id, label: expected.label, name: currentName.isEmpty ? expected.name : currentName, email: currentEmail)
+          profileManager.updateProfile(updatedProfile)
+          
+          Task {
+            await fetchIdentity()
+          }
+        }
+      }
+    } message: {
+      if let expected {
+        Text("Current mail: \(currentEmail)\nExpected mail: \(expected.email)\n\nUpdate profile with this data? It will change local .git/config.")
+      }
     }
   }
   
+//  private func fetchIdentity() async {
+//    let result = await Task.detached { [profileManager] in
+//      let output = profileManager.runGit(["config", "--list"], cwd: repo.path)
+//      var name = ""
+//      var email = ""
+//      for line in output.split(separator: "\n") {
+//        guard let eq = line.firstIndex(of: "=") else { continue }
+//        let key = line[..<eq].lowercased()
+//        let value = String(line[line.index(after: eq)...])
+//        if key == "user.name" { name = value }
+//        else if key == "user.email" { email = value }
+//      }
+//      return (name, email)
+//    }.value
+//    currentName = result.0
+//    currentEmail = result.1
+//    didLoad = true
+//  }
+  
   private func fetchIdentity() async {
-    let result = await Task.detached { [profileManager] in
-      let output = profileManager.runGit(["config", "--list"], cwd: repo.path)
-      var name = ""
-      var email = ""
-      for line in output.split(separator: "\n") {
-        guard let eq = line.firstIndex(of: "=") else { continue }
-        let key = line[..<eq].lowercased()
-        let value = String(line[line.index(after: eq)...])
-        if key == "user.name" { name = value }
-        else if key == "user.email" { email = value }
-      }
-      return (name, email)
-    }.value
-    currentName = result.0
-    currentEmail = result.1
-    didLoad = true
-  }
+     let result = await Task.detached { [profileManager] in
+       // Запрашиваем ТОЛЬКО имя и почту локально. Это работает мгновенно и не вызывает зависаний.
+       // Если настройка не задана, git вернет пустую строку (код возврата 1 игнорируется нашим runGit).
+       let name = profileManager.runGit(["config", "--local", "--get", "user.name"], cwd: repo.path)
+       let email = profileManager.runGit(["config", "--local", "--get", "user.email"], cwd: repo.path)
+       return (name, email)
+     }.value
+     
+     // Гарантируем безопасное обновление UI на главном потоке
+     await MainActor.run {
+       currentName = result.0
+       currentEmail = result.1
+       didLoad = true
+     }
+   }
 }

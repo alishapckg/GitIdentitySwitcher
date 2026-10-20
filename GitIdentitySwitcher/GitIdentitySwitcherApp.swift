@@ -12,5 +12,13 @@ struct GitIdentitySwitcherApp: App {
         .environmentObject(repoManager)
     }
     .menuBarExtraStyle(.window)
+    
+    // ВАЖНО: ID должен быть точно "custom-commit-window"
+    Window("Custom Commit", id: "custom-commit-window") {
+      CustomCommitView()
+        .environmentObject(repoManager)
+    }
+    .windowResizability(.contentSize)
+    .defaultPosition(.center)
   }
 }

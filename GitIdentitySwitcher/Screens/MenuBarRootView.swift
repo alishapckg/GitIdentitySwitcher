@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarRootView: View {
   @EnvironmentObject var profileManager: ProfileManager
   @EnvironmentObject var repoManager: RepoManager
+  @Environment(\.openWindow) private var openWindow
   
   enum Tab: String, CaseIterable, Identifiable {
     case profiles = "Profiles"
