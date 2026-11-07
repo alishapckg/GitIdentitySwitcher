@@ -147,6 +147,7 @@ struct RepoRowView: View {
   let repo: WatchedRepository
   @ObservedObject var profileManager: ProfileManager
   @EnvironmentObject var repoManager: RepoManager
+  @EnvironmentObject var scheduler: ScheduledCommitManager
   @Environment(\.openWindow) private var openWindow
   
   @State private var showFixAlert = false
@@ -155,15 +156,31 @@ struct RepoRowView: View {
   
   @State private var currentName = ""
   @State private var currentEmail = ""
+  @State private var hasChanges = false
   @State private var didLoad = false
   
+  private static let scheduleFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .short
+    formatter.timeStyle = .short
+    return formatter
+  }()
+  
+  private var expected: GitProfile? {
+    profileManager.profiles.first { $0.id == repo.expectedProfileID }
+  }
+  
+  /// Re-checks identity when the repo, its expected profile, or the global identity changes.
+  private var refreshKey: String {
+    "\(repo.path)|\(repo.expectedProfileID.uuidString)|\(expected?.email ?? "")|\(profileManager.activeEmail)|\(repoManager.commitGeneration)"
+  }
+  
   var body: some View {
-    let expected = profileManager.profiles.first { $0.id == repo.expectedProfileID }
+    let expected = self.expected
     let isMatch = expected != nil
       && !currentEmail.isEmpty
       && expected!.email.lowercased() == currentEmail.lowercased()
-    
-    let hasChanges = repoManager.hasChanges(in: repo.path)
+    let scheduledJobs = scheduler.jobs(for: repo.path)
     
     HStack {
       VStack(alignment: .leading, spacing: 2) {
@@ -173,6 +190,17 @@ struct RepoRowView: View {
           Text("Expected: \(expected.label) · \(expected.name) <\(expected.email)>")
             .font(.caption)
             .foregroundColor(.secondary)
+        }
+        if !scheduledJobs.isEmpty {
+          HStack(spacing: 4) {
+            Image(systemName: "clock.badge.checkmark")
+            Text(scheduledJobs.count == 1
+              ? "Scheduled commit: \(Self.scheduleFormatter.string(from: scheduledJobs[0].executeDate))"
+              : "Scheduled commits: \(scheduledJobs.count), next at \(Self.scheduleFormatter.string(from: scheduledJobs[0].executeDate))"
+            )
+            .font(.caption2)
+          }
+          .foregroundStyle(.secondary)
         }
         if didLoad {
           HStack(spacing: 4) {
@@ -184,7 +212,7 @@ struct RepoRowView: View {
             )
             .font(.caption2)
             
-            if !isMatch, let expected {
+            if !isMatch, expected != nil {
               Button("Fix") {
                 showFixAlert = true
               }
@@ -208,7 +236,8 @@ struct RepoRowView: View {
       
       Button {
         repoManager.targetRepoPathForCommit = repo.path
-        openWindow(id: "custom-commit-window") // не открывается
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: "custom-commit-window")
       } label: {
         Image(systemName: "calendar.badge.clock")
           .renderingMode(.template)
@@ -234,62 +263,48 @@ struct RepoRowView: View {
         Label("Delete", systemImage: "trash")
       }
     }
-    .task(id: "\(repo.path)|\(repo.expectedProfileID)") {
-      await fetchIdentity()
+    .task(id: refreshKey) {
+      await refresh()
+    }
+    .onAppear {
+      scheduler.refresh()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+      scheduler.refresh()
+      Task { await refresh() }
     }
     .alert("Change repo's config?", isPresented: $showFixAlert) {
       Button("Cancel", role: .cancel) {}
       Button("Change", role: .destructive) {
         if let expected, !currentEmail.isEmpty {
-          
-          let updatedProfile = GitProfile(id: expected.id, label: expected.label, name: currentName.isEmpty ? expected.name : currentName, email: currentEmail)
+          let updatedProfile = GitProfile(
+            id: expected.id,
+            label: expected.label,
+            name: currentName.isEmpty ? expected.name : currentName,
+            email: currentEmail
+          )
           profileManager.updateProfile(updatedProfile)
-          
-          Task {
-            await fetchIdentity()
-          }
         }
       }
     } message: {
       if let expected {
-        Text("Current mail: \(currentEmail)\nExpected mail: \(expected.email)\n\nUpdate profile with this data? It will change local .git/config.")
+        Text("Current mail: \(currentEmail)\nExpected mail: \(expected.email)\n\nUpdate the expected profile with the active identity?")
       }
     }
   }
   
-//  private func fetchIdentity() async {
-//    let result = await Task.detached { [profileManager] in
-//      let output = profileManager.runGit(["config", "--list"], cwd: repo.path)
-//      var name = ""
-//      var email = ""
-//      for line in output.split(separator: "\n") {
-//        guard let eq = line.firstIndex(of: "=") else { continue }
-//        let key = line[..<eq].lowercased()
-//        let value = String(line[line.index(after: eq)...])
-//        if key == "user.name" { name = value }
-//        else if key == "user.email" { email = value }
-//      }
-//      return (name, email)
-//    }.value
-//    currentName = result.0
-//    currentEmail = result.1
-//    didLoad = true
-//  }
-  
-  private func fetchIdentity() async {
-     let result = await Task.detached { [profileManager] in
-       // Запрашиваем ТОЛЬКО имя и почту локально. Это работает мгновенно и не вызывает зависаний.
-       // Если настройка не задана, git вернет пустую строку (код возврата 1 игнорируется нашим runGit).
-       let name = profileManager.runGit(["config", "--local", "--get", "user.name"], cwd: repo.path)
-       let email = profileManager.runGit(["config", "--local", "--get", "user.email"], cwd: repo.path)
-       return (name, email)
-     }.value
-     
-     // Гарантируем безопасное обновление UI на главном потоке
-     await MainActor.run {
-       currentName = result.0
-       currentEmail = result.1
-       didLoad = true
-     }
-   }
+  private func refresh() async {
+    let path = repo.path
+    async let nameResult = GitCommand.run(["config", "--get", "user.name"], in: path)
+    async let emailResult = GitCommand.run(["config", "--get", "user.email"], in: path)
+    async let statusResult = GitCommand.run(["status", "--porcelain"], in: path)
+    
+    let (name, email, status) = await (nameResult, emailResult, statusResult)
+    guard !Task.isCancelled else { return }
+    
+    currentName = name.output
+    currentEmail = email.output
+    hasChanges = !status.output.isEmpty
+    didLoad = true
+  }
 }

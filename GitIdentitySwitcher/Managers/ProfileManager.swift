@@ -24,7 +24,9 @@ class ProfileManager: ObservableObject {
     } else {
       profiles = stored
     }
-    refreshCurrentIdentity()
+    Task {
+      await refreshCurrentIdentity()
+    }
   }
   
   
@@ -48,40 +50,24 @@ class ProfileManager: ObservableObject {
   }
   
   func switchGlobalTo(_ profile: GitProfile) {
+    guard !isSwitching else { return }
     isSwitching = true
-    Task.detached { [weak self] in
-      guard let self else { return }
-      self.runGit(["config", "--global", "user.name", profile.name])
-      self.runGit(["config", "--global", "user.email", profile.email])
-      let name = self.runGit(["config", "--global", "user.name"])
-      let email = self.runGit(["config", "--global", "user.email"])
+    Task {
+      await GitCommand.run(["config", "--global", "user.name", profile.name])
+      await GitCommand.run(["config", "--global", "user.email", profile.email])
+      await refreshCurrentIdentity()
       await MainActor.run {
-        self.activeName = name
-        self.activeEmail = email
         self.isSwitching = false
       }
     }
   }
   
-  func refreshCurrentIdentity() {
-    activeName = runGit(["config", "--global", "user.name"])
-    activeEmail = runGit(["config", "--global", "user.email"])
-  }
-  
-  @discardableResult
-  func runGit(_ args: [String], cwd: String? = nil) -> String {
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    task.arguments = args
-    if let cwd = cwd {
-      task.currentDirectoryURL = URL(fileURLWithPath: cwd)
+  func refreshCurrentIdentity() async {
+    let name = await GitCommand.run(["config", "--global", "user.name"]).output
+    let email = await GitCommand.run(["config", "--global", "user.email"]).output
+    await MainActor.run {
+      self.activeName = name
+      self.activeEmail = email
     }
-    let pipe = Pipe()
-    task.standardOutput = pipe
-    task.standardError = Pipe()
-    try? task.run()
-    task.waitUntilExit()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   }
 }

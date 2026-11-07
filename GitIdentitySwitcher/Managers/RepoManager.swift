@@ -10,14 +10,19 @@ class RepoManager: ObservableObject {
   
   @Published var targetRepoPathForCommit: String = ""
   
+  /// Incremented after a commit so repository rows can refresh their state.
+  @Published var commitGeneration: Int = 0
+  
   
   // MARK: - Init
   
   init() {
     repos = SharedStore.loadRepos()
-    repairModifiedConfig()
     for repo in repos {
       installHooks(in: repo.path)
+    }
+    Task {
+      await repairModifiedConfig()
     }
   }
   
@@ -114,32 +119,13 @@ class RepoManager: ObservableObject {
     return lines.joined(separator: "\n")
   }
   
-  func hasChanges(in repoPath: String) -> Bool {
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    task.arguments = ["status", "--porcelain"]
-    task.currentDirectoryURL = URL(fileURLWithPath: repoPath)
-    
-    let pipe = Pipe()
-    task.standardOutput = pipe
-    task.standardError = pipe
-    
-    try? task.run()
-    task.waitUntilExit()
-    
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    
-    return !output.isEmpty
-  }
-  
   func installHooks(in repoPath: String) {
     let hooksDir = "\(repoPath)/.git/hooks"
     guard FileManager.default.fileExists(atPath: hooksDir) else { return }
     
-    // pre-commit, pre-push cover commit и push.
-    // post-merge covers git pull (merge-part).
-    // reference-transaction catches git fetch (update of refs).
+    // pre-commit and pre-push cover commit and push.
+    // post-merge covers git pull (the merge part).
+    // reference-transaction catches git fetch (updates of refs).
     let hooks = ["pre-commit", "pre-push", "post-merge", "reference-transaction"]
     
     for hook in hooks {
@@ -159,27 +145,18 @@ class RepoManager: ObservableObject {
   
   // MARK: - Config repair
   
-  private func repairModifiedConfig() {
+  private func repairModifiedConfig() async {
     for repo in repos {
-      let name = runGit(["config", "--local", "user.name"], cwd: repo.path)
+      let name = await GitCommand.run(
+        ["config", "--local", "user.name"],
+        in: repo.path
+      ).output
       if name.caseInsensitiveCompare("user.email") == .orderedSame {
-        runGit(["config", "--unset", "--local", "user.name"], cwd: repo.path)
+        await GitCommand.run(
+          ["config", "--unset", "--local", "user.name"],
+          in: repo.path
+        )
       }
     }
-  }
-  
-  @discardableResult
-  private func runGit(_ args: [String], cwd: String) -> String {
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    task.arguments = args
-    task.currentDirectoryURL = URL(fileURLWithPath: cwd)
-    let pipe = Pipe()
-    task.standardOutput = pipe
-    task.standardError = Pipe()
-    try? task.run()
-    task.waitUntilExit()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   }
 }

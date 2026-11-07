@@ -1,64 +1,75 @@
 import Foundation
 import Combine
 
-class CommitManager: ObservableObject {
+@MainActor
+final class CommitManager: ObservableObject {
   @Published var isCommitting: Bool = false
   @Published var lastResult: String = ""
-  
-  /// Выполняет git commit с указанной датой и временем
-  func commitWithCustomDate(repoPath: String, message: String, date: Date) -> String {
+  @Published var lastResultIsError: Bool = false
+
+  /// Stages all changes, creates a commit with the given date, and pushes it.
+  func commitAndPush(repoPath: String, message: String, date: Date) async {
+    guard !isCommitting, !repoPath.isEmpty else { return }
+
     isCommitting = true
-    
-    // Форматируем дату в формат, который понимает Git (ISO 8601)
+    defer { isCommitting = false }
+
+    await GitCommand.run(["add", "."], in: repoPath)
+
+    // Git understands ISO 8601 dates with an explicit time zone offset.
     let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-    formatter.timeZone = TimeZone.current // Или .current, если нужно локальное время
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
     let dateString = formatter.string(from: date)
-    
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    task.arguments = ["commit", "-m", message]
-    task.currentDirectoryURL = URL(fileURLWithPath: repoPath)
-    
-    // Устанавливаем переменные окружения для подмены даты
-    task.environment = [
-      "GIT_AUTHOR_DATE": dateString,
-      "GIT_COMMITTER_DATE": dateString
-    ]
-    
-    let outputPipe = Pipe()
-    let errorPipe = Pipe()
-    task.standardOutput = outputPipe
-    task.standardError = errorPipe
-    
-    do {
-      try task.run()
-      task.waitUntilExit()
-      
-      let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-      let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-      
-      let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      let error = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      
-      lastResult = task.terminationStatus == 0 ? output : "Ошибка: \(error)"
-    } catch {
-      lastResult = "Ошибка запуска процесса: \(error.localizedDescription)"
+
+    let result = await GitCommand.run(
+      ["commit", "-m", message],
+      in: repoPath,
+      environment: [
+        "GIT_AUTHOR_DATE": dateString,
+        "GIT_COMMITTER_DATE": dateString
+      ]
+    )
+
+    if result.isSuccess {
+      let commitSummary = result.output.isEmpty ? "Commit created." : result.output
+      let pushResult = await push(repoPath: repoPath)
+      if pushResult.isSuccess {
+        lastResult = "\(commitSummary)\nPushed to remote."
+        lastResultIsError = false
+      } else {
+        let details = pushResult.errorOutput.isEmpty ? pushResult.output : pushResult.errorOutput
+        lastResult = "\(commitSummary)\nPush failed: \(details)"
+        lastResultIsError = true
+      }
+    } else {
+      let details = result.errorOutput.isEmpty ? result.output : result.errorOutput
+      lastResult = "Error: \(details)"
+      lastResultIsError = true
     }
-    
-    isCommitting = false
-    return lastResult
   }
-  
-  /// Опционально: сначала делает git add ., затем коммит
-  func addAndCommit(repoPath: String, message: String, date: Date) -> String {
-    let addTask = Process()
-    addTask.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    addTask.arguments = ["add", "."]
-    addTask.currentDirectoryURL = URL(fileURLWithPath: repoPath)
-    try? addTask.run()
-    addTask.waitUntilExit()
-    
-    return commitWithCustomDate(repoPath: repoPath, message: message, date: date)
+
+  /// Pushes the current branch. If it has no upstream yet, sets origin/HEAD as upstream.
+  private func push(repoPath: String) async -> GitCommandResult {
+    let environment = ["GIT_TERMINAL_PROMPT": "0"]
+    let result = await GitCommand.run(["push"], in: repoPath, environment: environment)
+    guard !result.isSuccess else { return result }
+
+    let error = result.errorOutput.lowercased()
+    let needsUpstream = error.contains("no upstream")
+      || error.contains("no configured push destination")
+      || error.contains("has no upstream branch")
+    guard needsUpstream else { return result }
+
+    return await GitCommand.run(
+      ["push", "-u", "origin", "HEAD"],
+      in: repoPath,
+      environment: environment
+    )
+  }
+
+  func report(_ message: String, isError: Bool) {
+    lastResult = message
+    lastResultIsError = isError
   }
 }

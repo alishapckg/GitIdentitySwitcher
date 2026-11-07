@@ -17,6 +17,36 @@ enum SharedStore {
     return baseDirectory.appendingPathComponent("repos.json")
   }
   
+  static var scheduledCommitsURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduled-commits.json")
+  }
+  
+  static var schedulerScriptURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduler.py")
+  }
+  
+  static var schedulerLogURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduled-commits.log")
+  }
+  
+  static var schedulerOutLogURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduler.out.log")
+  }
+  
+  static var schedulerErrLogURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduler.err.log")
+  }
+  
+  static var schedulerLockURL: URL {
+    guard let baseDirectory else { return URL.currentDirectory() }
+    return baseDirectory.appendingPathComponent("scheduler.lock")
+  }
+  
   
   // MARK: - Methods
   
@@ -42,6 +72,18 @@ enum SharedStore {
   static func saveRepos(_ repos: [WatchedRepository]) {
     if let data = try? JSONEncoder().encode(repos) {
       try? data.write(to: reposURL)
+    }
+  }
+  
+  static func loadScheduledCommits() -> [ScheduledCommit] {
+    guard let data = try? Data(contentsOf: scheduledCommitsURL),
+          let decoded = try? JSONDecoder().decode([ScheduledCommit].self, from: data) else { return [] }
+    return decoded
+  }
+  
+  static func saveScheduledCommits(_ commits: [ScheduledCommit]) {
+    if let data = try? JSONEncoder().encode(commits) {
+      try? data.write(to: scheduledCommitsURL, options: .atomic)
     }
   }
 }

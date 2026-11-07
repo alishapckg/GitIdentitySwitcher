@@ -1,23 +1,39 @@
 import SwiftUI
 
 struct CustomCommitView: View {
-  // Получаем менеджер, в который RepoRowView записал путь
+  // The path is written here by RepoRowView before the window is opened.
   @EnvironmentObject var repoManager: RepoManager
+  @EnvironmentObject var scheduler: ScheduledCommitManager
   @StateObject private var commitManager = CommitManager()
-  
+
   @State private var commitMessage: String = ""
   @State private var selectedDate: Date = Date()
   @State private var showResult: Bool = false
-  
+
+  private static let dateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter
+  }()
+
+  private var isFutureCommit: Bool {
+    selectedDate.timeIntervalSinceNow > 120
+  }
+
+  private var pendingJobs: [ScheduledCommit] {
+    scheduler.jobs(for: repoManager.targetRepoPathForCommit)
+  }
+
   var body: some View {
-    VStack(spacing: 20) {
-      Text("Кастомный коммит")
+    VStack(spacing: 16) {
+      Text("Custom Commit")
         .font(.title2)
         .fontWeight(.semibold)
-      
-      // Путь к репозиторию (берется автоматически из repoManager)
+
+      // Repository path (taken automatically from repoManager)
       VStack(alignment: .leading, spacing: 6) {
-        Text("Репозиторий:")
+        Text("Repository:")
           .font(.caption)
           .foregroundColor(.secondary)
         Text(repoManager.targetRepoPathForCommit)
@@ -28,64 +44,161 @@ struct CustomCommitView: View {
           .cornerRadius(6)
           .lineLimit(2)
       }
-      
-      // Сообщение коммита
+
+      // Commit message
       VStack(alignment: .leading, spacing: 6) {
-        Text("Сообщение коммита:")
+        Text("Commit message:")
           .font(.caption)
           .foregroundColor(.secondary)
-        TextField("Введите сообщение...", text: $commitMessage)
+        TextField("Enter a message...", text: $commitMessage)
           .textFieldStyle(.roundedBorder)
       }
-      
-      // Красивый графический календарь
+
+      // Calendar and time
       VStack(alignment: .leading, spacing: 8) {
-        Text("Дата и время коммита:")
+        Text("Commit date and time:")
           .font(.caption)
           .foregroundColor(.secondary)
-        
-        DatePicker(
-          "",
-          selection: $selectedDate,
-          displayedComponents: [.date, .hourAndMinute]
+
+        DateTimePicker(selection: $selectedDate)
+
+        Text(
+          isFutureCommit
+            ? "The commit will run and push automatically at the selected time, even if the app is closed."
+            : "The commit will be created and pushed immediately."
         )
-        .datePickerStyle(.graphical)
-        .labelsHidden()
+        .font(.caption2)
+        .foregroundColor(.secondary)
       }
-      
-      // Кнопка выполнения
+
+      // Action button
       Button(action: {
         guard !commitMessage.isEmpty else { return }
-        let result = commitManager.addAndCommit(
-          repoPath: repoManager.targetRepoPathForCommit,
-          message: commitMessage,
-          date: selectedDate
-        )
-        showResult = true
+
+        if isFutureCommit {
+          let job = scheduler.schedule(
+            repoPath: repoManager.targetRepoPathForCommit,
+            message: commitMessage,
+            date: selectedDate
+          )
+          commitManager.report(
+            "Commit scheduled for \(Self.dateFormatter.string(from: job.executeDate)). It will also be pushed.",
+            isError: false
+          )
+          showResult = true
+        } else {
+          Task {
+            await commitManager.commitAndPush(
+              repoPath: repoManager.targetRepoPathForCommit,
+              message: commitMessage,
+              date: selectedDate
+            )
+            showResult = true
+            repoManager.commitGeneration += 1
+          }
+        }
       }) {
         if commitManager.isCommitting {
           ProgressView().progressViewStyle(.circular)
         } else {
-          Text("Скоммитить").frame(maxWidth: .infinity)
+          Text(isFutureCommit ? "Schedule Commit & Push" : "Commit & Push")
+            .frame(maxWidth: .infinity)
         }
       }
       .buttonStyle(.borderedProminent)
       .controlSize(.large)
-      .disabled(commitMessage.isEmpty || commitManager.isCommitting)
-      
-      // Результат
+      .disabled(
+        commitMessage.isEmpty
+          || repoManager.targetRepoPathForCommit.isEmpty
+          || commitManager.isCommitting
+      )
+
+      // Result
       if showResult {
         Text(commitManager.lastResult)
           .font(.caption)
-          .foregroundColor(commitManager.lastResult.hasPrefix("Ошибка") ? .red : .green)
+          .foregroundColor(commitManager.lastResultIsError ? .red : .green)
           .padding(8)
           .background(Color.gray.opacity(0.1))
           .cornerRadius(6)
           .textSelection(.enabled)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
+
+      // Pending scheduled commits for this repository
+      if !pendingJobs.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Scheduled commits")
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ForEach(pendingJobs) { job in
+            HStack(spacing: 8) {
+              Image(systemName: "clock")
+                .foregroundStyle(.secondary)
+              VStack(alignment: .leading, spacing: 1) {
+                Text(Self.dateFormatter.string(from: job.executeDate))
+                  .font(.caption)
+                Text(job.message)
+                  .font(.caption2)
+                  .foregroundColor(.secondary)
+                  .lineLimit(1)
+              }
+              Spacer()
+              Button {
+                scheduler.cancel(job)
+              } label: {
+                Image(systemName: "xmark.circle.fill")
+                  .foregroundStyle(.secondary)
+              }
+              .buttonStyle(.plain)
+              .help("Cancel scheduled commit")
+            }
+          }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(8)
+      }
     }
-    .padding(24)
-    .frame(width: 420) // Ширина для красивого отображения календаря
+    .padding(20)
+    .frame(width: 420)
+    .background(WindowConfigurator())
+    .onAppear {
+      scheduler.refresh()
+    }
+    .onChange(of: repoManager.targetRepoPathForCommit) { _, _ in
+      commitMessage = ""
+      selectedDate = Date()
+      showResult = false
+      scheduler.refresh()
+    }
+  }
+}
+
+// MARK: - Window configuration
+
+/// Makes the commit window float above other apps and appear on every Space,
+/// which is required because the app runs as a menu bar (LSUIElement) app.
+private struct WindowConfigurator: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView {
+    WindowConfiguringView()
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class WindowConfiguringView: NSView {
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    guard let window else { return }
+
+    window.level = .floating
+    window.collectionBehavior.insert(.canJoinAllSpaces)
+    window.collectionBehavior.insert(.fullScreenAuxiliary)
+
+    NSApp.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(nil)
   }
 }
