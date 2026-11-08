@@ -148,7 +148,6 @@ struct RepoRowView: View {
   @ObservedObject var profileManager: ProfileManager
   @EnvironmentObject var repoManager: RepoManager
   @EnvironmentObject var scheduler: ScheduledCommitManager
-  @Environment(\.openWindow) private var openWindow
   
   @State private var showFixAlert = false
   var onDelete: () -> Void
@@ -156,7 +155,6 @@ struct RepoRowView: View {
   
   @State private var currentName = ""
   @State private var currentEmail = ""
-  @State private var hasChanges = false
   @State private var didLoad = false
   
   private static let scheduleFormatter: DateFormatter = {
@@ -236,16 +234,17 @@ struct RepoRowView: View {
       
       Button {
         repoManager.targetRepoPathForCommit = repo.path
-        NSApp.activate(ignoringOtherApps: true)
-        openWindow(id: "custom-commit-window")
+        CommitWindowController.shared.show(
+          repoManager: repoManager,
+          scheduler: scheduler
+        )
       } label: {
         Image(systemName: "calendar.badge.clock")
           .renderingMode(.template)
           .foregroundStyle(.blue)
       }
       .buttonStyle(.borderless)
-      .disabled(!hasChanges)
-      .help(hasChanges ? "Create custom commit" : "No changes for commit")
+      .help("Create a commit or schedule one for later")
       
       Button(role: .destructive) {
         onDelete()
@@ -297,14 +296,12 @@ struct RepoRowView: View {
     let path = repo.path
     async let nameResult = GitCommand.run(["config", "--get", "user.name"], in: path)
     async let emailResult = GitCommand.run(["config", "--get", "user.email"], in: path)
-    async let statusResult = GitCommand.run(["status", "--porcelain"], in: path)
     
-    let (name, email, status) = await (nameResult, emailResult, statusResult)
+    let (name, email) = await (nameResult, emailResult)
     guard !Task.isCancelled else { return }
     
     currentName = name.output
     currentEmail = email.output
-    hasChanges = !status.output.isEmpty
     didLoad = true
   }
 }

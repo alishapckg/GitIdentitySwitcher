@@ -164,7 +164,6 @@ struct CustomCommitView: View {
     }
     .padding(20)
     .frame(width: 420)
-    .background(WindowConfigurator())
     .onAppear {
       scheduler.refresh()
     }
@@ -174,31 +173,5 @@ struct CustomCommitView: View {
       showResult = false
       scheduler.refresh()
     }
-  }
-}
-
-// MARK: - Window configuration
-
-/// Makes the commit window float above other apps and appear on every Space,
-/// which is required because the app runs as a menu bar (LSUIElement) app.
-private struct WindowConfigurator: NSViewRepresentable {
-  func makeNSView(context: Context) -> NSView {
-    WindowConfiguringView()
-  }
-
-  func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-private final class WindowConfiguringView: NSView {
-  override func viewDidMoveToWindow() {
-    super.viewDidMoveToWindow()
-    guard let window else { return }
-
-    window.level = .floating
-    window.collectionBehavior.insert(.canJoinAllSpaces)
-    window.collectionBehavior.insert(.fullScreenAuxiliary)
-
-    NSApp.activate(ignoringOtherApps: true)
-    window.makeKeyAndOrderFront(nil)
   }
 }

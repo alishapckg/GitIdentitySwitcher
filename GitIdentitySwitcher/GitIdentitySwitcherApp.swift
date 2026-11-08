@@ -14,14 +14,5 @@ struct GitIdentitySwitcherApp: App {
         .environmentObject(scheduledCommitManager)
     }
     .menuBarExtraStyle(.window)
-    
-    // Keep the identifier in sync with the value used in RepoRowView.
-    Window("Custom Commit", id: "custom-commit-window") {
-      CustomCommitView()
-        .environmentObject(repoManager)
-        .environmentObject(scheduledCommitManager)
-    }
-    .windowResizability(.contentSize)
-    .defaultPosition(.center)
   }
 }
